@@ -305,7 +305,8 @@ TEE_Result virt_guest_created(uint16_t guest_id)
 	TEE_Result res = TEE_SUCCESS;
 	uint32_t exceptions = 0;
 
-	if (guest_id == HYP_CLNT_ID)
+	/* FF-A assigns endpoint ID 0 to the Normal World physical instance. */
+	if (guest_id == HYP_CLNT_ID && !IS_ENABLED(CFG_CORE_SEL1_SPMC))
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	prtn = nex_calloc(1, sizeof(*prtn));

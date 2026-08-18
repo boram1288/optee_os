@@ -859,6 +859,9 @@ static void handle_framework_direct_request(struct thread_smc_1_2_regs *args)
 			uint16_t guest_id = args->a5;
 			TEE_Result res = virt_guest_created(guest_id);
 
+			IMSG("FF-A VM created id=%" PRIu16 " result=%#" PRIx32,
+			     guest_id, res);
+
 			w0 = direct_resp_fid;
 			w1 = swap_src_dst(args->a1);
 			w2 = FFA_MSG_FLAG_FRAMEWORK | FFA_MSG_RESP_VM_CREATED;
@@ -898,13 +901,25 @@ static void handle_framework_direct_request(struct thread_smc_1_2_regs *args)
 
 static void optee_lsp_handle_direct_request(struct thread_smc_1_2_regs *args)
 {
+	TEE_Result res = TEE_SUCCESS;
+	uint16_t sender_id = get_sender_id(args->a1);
+
 	if (args->a2 & FFA_MSG_FLAG_FRAMEWORK) {
 		handle_framework_direct_request(args);
 		return;
 	}
 
-	if (IS_ENABLED(CFG_NS_VIRTUALIZATION) &&
-	    virt_set_guest(get_sender_id(args->a1))) {
+	if (IS_ENABLED(CFG_NS_VIRTUALIZATION)) {
+		res = virt_set_guest(sender_id);
+		/* The Normal World physical FF-A instance has endpoint ID 0. */
+		if (res && sender_id == HYP_CLNT_ID) {
+			res = virt_guest_created(sender_id);
+			if (!res)
+				res = virt_set_guest(sender_id);
+		}
+	}
+
+	if (res) {
 		spmc_set_args(args, get_direct_resp_fid(args->a0),
 			      swap_src_dst(args->a1), 0,
 			      TEE_ERROR_ITEM_NOT_FOUND, 0, 0);
@@ -1498,7 +1513,8 @@ static void handle_mem_reclaim(struct thread_smc_1_2_regs *args)
 			guest_id = (cookie >> FFA_MEMORY_HANDLE_PRTN_SHIFT) &
 				   FFA_MEMORY_HANDLE_PRTN_MASK;
 		}
-		if (!guest_id)
+		/* Endpoint 0 is the Normal World physical instance at S-EL1. */
+		if (!guest_id && !IS_ENABLED(CFG_CORE_SEL1_SPMC))
 			goto out;
 		if (virt_set_guest(guest_id)) {
 			if (!virt_reclaim_cookie_from_destroyed_guest(guest_id,
