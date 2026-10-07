@@ -29,3 +29,8 @@ recipe-rproc_pub_key = $(PYTHON3) scripts/pem_to_pub_c.py \
 	--prefix rproc_pub_key --key $(RPROC_SIGN_KEY)    \
 	--out $(sub-dir-out)/rproc_pub_key.c
 endif
+srcs-$(CFG_PVM_STORAGE_GUARD) += pvm_storage_guard.c
+
+ifeq ($(CFG_PVM_STORAGE_GUARD),y)
+incdirs_ext-y += $(CFG_PVM_STORAGE_KEYS_DIR)
+endif
